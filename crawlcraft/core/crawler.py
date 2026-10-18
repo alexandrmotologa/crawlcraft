@@ -40,6 +40,7 @@ class CrawlConfig:
         custom_headers: Optional[Dict[str, str]] = None,
         cookies: Optional[Dict[str, str]] = None,
         from_sitemap: bool = False,
+        seed_from_sitemaps: Optional[bool] = None,
         webhook_url: Optional[str] = None,
     ) -> None:
         self.start_urls = start_urls
@@ -57,7 +58,7 @@ class CrawlConfig:
         self.exclude_selectors = exclude_selectors
         self.custom_headers = custom_headers
         self.cookies = cookies
-        self.from_sitemap = from_sitemap
+        self.from_sitemap = from_sitemap if seed_from_sitemaps is None else seed_from_sitemaps
         self.webhook_url = webhook_url
 
 
@@ -258,21 +259,30 @@ class AsyncCrawler:
             return crawled_page
 
     async def _worker(self) -> None:
-        while self.is_running and self.crawled_count < self.config.max_pages:
+        while self.is_running:
+            if self.crawled_count >= self.config.max_pages:
+                self.is_running = False
+                break
+
             try:
-                url, depth = await asyncio.wait_for(self.queue.get(), timeout=1.0)
+                url, depth = await asyncio.wait_for(self.queue.get(), timeout=0.5)
             except asyncio.TimeoutError:
-                if self.queue.empty():
+                if not self.is_running or (self.queue.empty() and self._active_workers == 0):
                     break
                 continue
 
+            self._active_workers += 1
             try:
-                await self._process_url(url, depth)
+                if self.crawled_count < self.config.max_pages:
+                    await self._process_url(url, depth)
             except Exception as exc:
                 logger.error("Unexpected error processing %s: %s", url, exc)
                 self.failed_count += 1
             finally:
+                self._active_workers -= 1
                 self.queue.task_done()
+                if self.crawled_count >= self.config.max_pages:
+                    self.is_running = False
 
     async def run(self) -> List[CrawledPage]:
         """Runs the bounded crawl process until complete or capped by max_pages."""
@@ -280,6 +290,7 @@ class AsyncCrawler:
         self.results.clear()
         self.crawled_count = 0
         self.failed_count = 0
+        self._active_workers = 0
 
         # Initialize seed domains
         for url in self.config.start_urls:
@@ -307,12 +318,27 @@ class AsyncCrawler:
         # Launch worker tasks up to concurrency limit
         workers = [asyncio.create_task(self._worker()) for _ in range(self.config.concurrency)]
 
-        await self.queue.join()
-        self.is_running = False
+        while self.is_running:
+            if self.crawled_count >= self.config.max_pages:
+                self.is_running = False
+                break
+            if self.queue.empty() and self._active_workers == 0:
+                await asyncio.sleep(0.1)
+                if self.queue.empty() and self._active_workers == 0:
+                    self.is_running = False
+                    break
+            await asyncio.sleep(0.05)
 
         for w in workers:
             w.cancel()
         await asyncio.gather(*workers, return_exceptions=True)
+
+        while not self.queue.empty():
+            try:
+                self.queue.get_nowait()
+                self.queue.task_done()
+            except Exception:
+                break
 
         # Trigger webhook notification if configured
         if self.config.webhook_url:
