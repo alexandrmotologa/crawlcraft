@@ -33,6 +33,17 @@ export interface CrawledPage {
   error?: string | null;
 }
 
+export interface MarkdownChunk {
+  chunk_id: string;
+  content: string;
+  breadcrumbs: string[];
+  token_count: number;
+  char_count: number;
+  word_count: number;
+  index: number;
+  metadata?: Record<string, any>;
+}
+
 export interface CrawlJobStatus {
   job_id: string;
   status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';

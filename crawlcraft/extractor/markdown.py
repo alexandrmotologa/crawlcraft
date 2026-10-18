@@ -170,10 +170,20 @@ class MarkdownConverter:
 
         return "".join(results)
 
-    def convert(self, html: str, extract_main_only: bool = True) -> str:
+    def convert(
+        self,
+        html: str,
+        extract_main_only: bool = True,
+        include_selectors: Optional[List[str]] = None,
+        exclude_selectors: Optional[List[str]] = None,
+    ) -> str:
         """Parses raw HTML, cleans noise, and outputs synthesized GFM Markdown."""
-        parser = clean_html_tree(html)
-        target_node = extract_main_content_node(parser) if extract_main_only else parser.body or parser.root
+        parser = clean_html_tree(html, exclude_selectors=exclude_selectors)
+        target_node = (
+            extract_main_content_node(parser, include_selectors=include_selectors)
+            if extract_main_only or include_selectors
+            else parser.body or parser.root
+        )
 
         if not target_node:
             return ""
@@ -185,7 +195,18 @@ class MarkdownConverter:
         return cleaned_md.strip()
 
 
-def html_to_markdown(html: str, base_url: Optional[str] = None, extract_main_only: bool = True) -> str:
+def html_to_markdown(
+    html: str,
+    base_url: Optional[str] = None,
+    extract_main_only: bool = True,
+    include_selectors: Optional[List[str]] = None,
+    exclude_selectors: Optional[List[str]] = None,
+) -> str:
     """Convenience function to convert raw HTML string into clean GFM Markdown."""
     converter = MarkdownConverter(base_url=base_url)
-    return converter.convert(html, extract_main_only=extract_main_only)
+    return converter.convert(
+        html,
+        extract_main_only=extract_main_only,
+        include_selectors=include_selectors,
+        exclude_selectors=exclude_selectors,
+    )

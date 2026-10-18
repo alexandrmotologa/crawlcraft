@@ -77,14 +77,24 @@ async def main():
         print(f"Saved dashboard screenshot to {dashboard_png}")
 
         # Capture animation frames for GIF
-        for i in range(2, 16):
+        for i in range(2, 20):
             if i == 5:
-                # Switch to Metadata tab to demonstrate interactivity
-                meta_tab = page.locator("button:has-text('Document Metadata')")
+                # Open Filters & Selectors
+                advanced_btn = page.locator("button:has-text('Filters & Selectors')")
+                if await advanced_btn.count() > 0:
+                    await advanced_btn.click()
+            elif i == 8:
+                # Switch to RAG Chunks tab
+                chunks_tab = page.locator("button:has-text('RAG Chunks')")
+                if await chunks_tab.count() > 0:
+                    await chunks_tab.click()
+            elif i == 12:
+                # Switch to Metadata tab
+                meta_tab = page.locator("button:has-text('Metadata & Schemas')")
                 if await meta_tab.count() > 0:
                     await meta_tab.click()
-            elif i == 10:
-                # Switch back to markdown tab
+            elif i == 16:
+                # Switch back to Synthesized Markdown tab
                 md_tab = page.locator("button:has-text('Synthesized Markdown')")
                 if await md_tab.count() > 0:
                     await md_tab.click()

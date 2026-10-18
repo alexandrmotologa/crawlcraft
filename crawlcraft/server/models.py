@@ -11,6 +11,10 @@ class ExtractRequest(BaseModel):
     html: Optional[str] = Field(None, description="Raw HTML string if already fetched")
     extract_main_only: bool = Field(True, description="Prune header, footer, and navigation boilerplate")
     allow_spa_fallback: bool = Field(True, description="Delegate to headless Chromium if empty SPA detected")
+    include_selectors: Optional[List[str]] = Field(None, description="CSS selectors to whitelist and extract")
+    exclude_selectors: Optional[List[str]] = Field(None, description="CSS selectors to blacklist and decompose")
+    custom_headers: Optional[Dict[str, str]] = Field(None, description="Custom HTTP headers like Authorization")
+    cookies: Optional[Dict[str, str]] = Field(None, description="Custom cookies for authentication")
 
 
 class ExtractResponse(BaseModel):
@@ -21,6 +25,7 @@ class ExtractResponse(BaseModel):
     metadata: Dict[str, Any]
     rendered_with: str
     elapsed_ms: float
+    cleaned_html: Optional[str] = Field(None, description="Pruned HTML DOM before markdown conversion")
 
 
 class CrawlRequest(BaseModel):
@@ -36,6 +41,18 @@ class CrawlRequest(BaseModel):
     respect_robots_txt: bool = Field(True, description="Strict compliance with robots.txt")
     allow_spa_fallback: bool = Field(True, description="Headless Chromium fallback for dynamic SPAs")
     extract_main_only: bool = Field(True, description="Extract main article body")
+    include_selectors: Optional[List[str]] = Field(None, description="CSS selectors to extract")
+    exclude_selectors: Optional[List[str]] = Field(None, description="CSS selectors to drop")
+    custom_headers: Optional[Dict[str, str]] = Field(None, description="Custom HTTP headers")
+    cookies: Optional[Dict[str, str]] = Field(None, description="Session cookies")
+    from_sitemap: bool = Field(False, description="Seed the crawl queue from XML sitemaps")
+    seed_from_sitemaps: Optional[bool] = Field(None, description="Alias for from_sitemap")
+    webhook_url: Optional[str] = Field(None, description="Callback URL for job completion notification")
+
+    def get_from_sitemap(self) -> bool:
+        if self.seed_from_sitemaps is not None:
+            return self.seed_from_sitemaps
+        return self.from_sitemap
 
 
 class CrawlJobResponse(BaseModel):
@@ -56,3 +73,17 @@ class CrawlJobStatus(BaseModel):
     total_tokens: int
     elapsed_seconds: float
     pages: List[Dict[str, Any]]
+
+
+class SitemapRequest(BaseModel):
+    """Request model for discovering sitemap URLs."""
+
+    url: str = Field(..., description="Root domain or sitemap XML URL")
+    max_urls: int = Field(500, ge=1, le=5000, description="Max sitemap entries to retrieve")
+
+
+class SitemapResponse(BaseModel):
+    """Response containing discovered URLs from sitemap."""
+
+    urls: List[Dict[str, Any]]
+    count: int

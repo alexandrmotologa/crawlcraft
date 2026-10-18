@@ -17,10 +17,15 @@ export const LiveCrawlConsole: React.FC<Props> = ({
 }) => {
   const [filter, setFilter] = useState('');
 
-  const filteredPages = pages.filter(p =>
-    p.url.toLowerCase().includes(filter.toLowerCase()) ||
-    (p.metadata.title && p.metadata.title.toLowerCase().includes(filter.toLowerCase()))
-  );
+  const filteredPages = pages.filter((p) => {
+    const q = filter.toLowerCase().trim();
+    if (!q) return true;
+    return (
+      p.url.toLowerCase().includes(q) ||
+      (p.metadata.title && p.metadata.title.toLowerCase().includes(q)) ||
+      (p.markdown && p.markdown.toLowerCase().includes(q))
+    );
+  });
 
   return (
     <div className="flex flex-col h-full bg-slate-900/60 rounded-xl border border-slate-800 overflow-hidden">

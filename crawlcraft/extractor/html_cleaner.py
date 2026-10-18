@@ -66,7 +66,10 @@ CONTENT_SELECTORS: List[str] = [
 ]
 
 
-def clean_html_tree(html_or_parser: str | LexborHTMLParser) -> LexborHTMLParser:
+def clean_html_tree(
+    html_or_parser: str | LexborHTMLParser,
+    exclude_selectors: Optional[List[str]] = None,
+) -> LexborHTMLParser:
     """Parses and strips scripts, styles, boilerplate, and ads from an HTML document."""
     parser = LexborHTMLParser(html_or_parser) if isinstance(html_or_parser, str) else html_or_parser
 
@@ -92,12 +95,36 @@ def clean_html_tree(html_or_parser: str | LexborHTMLParser) -> LexborHTMLParser:
         except Exception:
             continue
 
+    # 4. Decompose custom user-specified exclude selectors
+    if exclude_selectors:
+        for selector in exclude_selectors:
+            try:
+                for node in parser.css(selector):
+                    tag = node.tag.lower()
+                    if tag not in ("body", "html"):
+                        node.decompose()
+            except Exception:
+                continue
+
     return parser
 
 
-def extract_main_content_node(parser: LexborHTMLParser) -> Node:
+def extract_main_content_node(
+    parser: LexborHTMLParser,
+    include_selectors: Optional[List[str]] = None,
+) -> Node:
     """Finds the most text-dense semantic container (article, main, or highest text-density node)."""
-    # First check well-known semantic selectors
+    # 0. Check custom user include selectors first
+    if include_selectors:
+        for selector in include_selectors:
+            try:
+                candidates = parser.css(selector)
+                if candidates:
+                    return max(candidates, key=lambda n: len(n.text(deep=True).strip()))
+            except Exception:
+                continue
+
+    # 1. Check well-known semantic selectors
     for selector in CONTENT_SELECTORS:
         try:
             candidates = parser.css(selector)

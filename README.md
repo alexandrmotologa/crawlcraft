@@ -4,7 +4,7 @@
   <p><strong>Headless-free asynchronous web crawler and semantic markdown synthesizer for LLM knowledge bases and RAG pipelines.</strong></p>
 
   <p>
-    <a href="https://github.com/alexandrmotologa/crawlcraft/actions"><img src="https://img.shields.io/badge/tests-20%20passed-10b981?style=flat-square" alt="Tests"></a>
+    <a href="https://github.com/alexandrmotologa/crawlcraft/actions"><img src="https://img.shields.io/badge/tests-33%20passed-10b981?style=flat-square" alt="Tests"></a>
     <a href="https://python.org"><img src="https://img.shields.io/badge/python-3.12-38bdf8?style=flat-square" alt="Python 3.12"></a>
     <a href="https://react.dev"><img src="https://img.shields.io/badge/react-19-61dafb?style=flat-square" alt="React 19"></a>
     <a href="https://fastapi.tiangolo.com"><img src="https://img.shields.io/badge/fastapi-0.110+-059669?style=flat-square" alt="FastAPI"></a>
@@ -40,6 +40,7 @@ CrawlCraft provides a local alternative. It runs an asynchronous HTTP/2 network 
 |  * Asyncio + HTTPX Concurrency  |                 |  * Playwright Headless Lazy   |
 |  * Robots.txt & Token Bucket    |                 |  * DOM Hydration Detection    |
 |  * Bounded BFS / Domain Scoping |                 |  * Anti-Bot Header Rotation   |
+|  * Sitemap & RSS Feed Discovery |                 |                               |
 +-------+-------------------------+                 +-----------------------+-------+
         |                                                                   |
         +---------------------------------+---------------------------------+
@@ -48,21 +49,23 @@ CrawlCraft provides a local alternative. It runs an asynchronous HTTP/2 network 
                         |   Semantic Markdown Synthesizer   |
                         |  * C-Based HTML5 (Selectolax)     |
                         |  * Boilerplate & Ad Removal       |
+                        |  * CSS Whitelist/Blacklist Select |
                         |  * Table & Code Block Fidelity    |
                         +-----------------+-----------------+
                                           |
                         +-----------------v-----------------+
-                        |   Metadata & Token Estimator      |
-                        |  * JSON-LD & OpenGraph Extractor  |
+                        |   RAG Chunking & Token Estimator  |
+                        |  * Hierarchical Header Breadcrumbs|
                         |  * Tiktoken cl100k_base Counter   |
                         |  * SimHash Content Deduplication  |
+                        |  * Prompt Pack Generator (XML/MD) |
                         +-----------------+-----------------+
                                           |
                         +-----------------v-----------------+
                         |   Local REST API & Web Studio     |
                         |  * FastAPI + SSE Live Stream      |
-                        |  * Markdown Preview & Diff        |
-                        |  * Directory & JSONL Exporter     |
+                        |  * Markdown Preview & RAG Chunks  |
+                        |  * JSONL / Chunks / LLM Exporter  |
                         +-----------------------------------+
 ```
 
@@ -90,12 +93,16 @@ Benchmarking C-based Selectolax parsing against full headless browser execution 
 ## Key Features
 
 - **Dual-Engine Routing**: Runs HTTP/2 requests with realistic browser header rotation by default. Analyzes DOM text density and known framework mount roots (`#root`, `#app`, `#__next`) to identify unhydrated pages, deploying Chromium only when JavaScript is required.
+- **Hierarchical RAG Chunking**: Breaks Markdown documents into token-bounded chunks preserving heading breadcrumb hierarchies (`# Section > ## Subsection`) and keeping code blocks and tables intact.
+- **Prompt Pack Context Generator**: Compiles crawled web documents into structured XML packages with manifests and CDATA delimiters, or clean Markdown tables with system directives ready for LLM prompts.
+- **Sitemap & Feed Auto-Discovery**: Automatically discovers and parses XML sitemaps, gzipped `.xml.gz` sitemaps, sitemap indexes, and RSS/Atom feeds to seed the crawl queue.
+- **CSS Whitelist and Blacklist Selectors**: Isolate target containers (`--include-selector`) or strip project-specific banners and widgets (`--exclude-selector`).
 - **GFM Table and Code Preservation**: Converts HTML tables to aligned GitHub Flavored Markdown tables with cell sanitization. Extracts programming language classes (`language-python`, `lang-ts`) on code blocks.
 - **Noise and Banner Stripping**: Decomposes cookie consent dialogs, newsletter subscription boxes, tracking pixels, navigation menus, and footers.
 - **RAG Metadata and Token Estimation**: Parses Schema.org JSON-LD scripts, OpenGraph attributes, Dublin Core elements, and computes exact token counts using `tiktoken` (`cl100k_base` model encoding).
 - **Near-Duplicate Detection**: Implements 64-bit SimHash fingerprints with Hamming distance comparisons to avoid re-indexing duplicated or slightly modified pages.
 - **Polite Crawling**: Per-domain token bucket rate limiting prevents target server saturation. Asynchronous robots.txt manager respects Allow and Disallow rules.
-- **Interactive Web Studio**: Built with React 19, TypeScript, and Vite. Streams real-time crawling metrics and page events via Server-Sent Events (SSE).
+- **Interactive Web Studio**: Built with React 19, TypeScript, and Vite. Streams real-time crawling metrics, page events, and hierarchical chunk inspections.
 
 ---
 
@@ -133,10 +140,26 @@ Convert any web page or documentation article into clean Markdown:
 crawlcraft extract "https://docs.python.org/3/tutorial/index.html" -o tutorial.md
 ```
 
+Extract with hierarchical RAG chunks:
+```bash
+crawlcraft extract "https://docs.python.org/3/tutorial/index.html" --format chunks --chunk-size 512 -o chunks.json
+```
+
+#### Sitemap & Feed Discovery
+Discover and extract all indexed URLs from a website:
+```bash
+crawlcraft sitemap "https://example.com" --limit 100 --output sitemap_urls.txt
+```
+
 #### Multi-Page Bounded Crawl
 Run a bounded BFS crawl with concurrency caps and export directly to JSONL:
 ```bash
 crawlcraft crawl "https://example.com" --depth 2 --max-pages 50 --concurrency 8 --output dataset.jsonl
+```
+
+Crawl seeded from sitemaps and export structured LLM prompt context:
+```bash
+crawlcraft crawl "https://example.com" --sitemap --max-pages 30 --format llm --output context_pack.xml
 ```
 
 #### Speed Benchmark
@@ -147,7 +170,7 @@ crawlcraft benchmark "https://example.com" --iterations 5
 
 ---
 
-### 2. Running the REST API & Web Studio
+## 2. Running the REST API & Web Studio
 
 Start the FastAPI daemon:
 ```bash
@@ -173,26 +196,19 @@ curl -X POST "http://127.0.0.1:8000/v1/crawl" \
 ```
 
 - **`GET /v1/crawl/{job_id}/stream`**: Server-Sent Events stream emitting pages as they finish crawling.
-- **`GET /v1/crawl/{job_id}/export?format=jsonl`**: Download the full crawl dataset.
+- **`GET /v1/crawl/{job_id}/export?format=jsonl|markdown|chunks|llm_prompt`**: Download the full crawl dataset in the desired format.
+- **`POST /v1/sitemap`**: Parse and discover URLs from sitemaps or feeds.
 - **`GET /v1/health`**: Healthcheck and system capability diagnostics.
 
 ---
 
-### 3. Python Library Usage
+## 3. Python Library Usage
 
 ```python
 import asyncio
 from crawlcraft.core.crawler import AsyncCrawler, CrawlConfig
-from crawlcraft.extractor.markdown import html_to_markdown
-from crawlcraft.extractor.metadata import extract_metadata
-
-# Direct HTML to Markdown conversion
-html = "<h1>Title</h1><p>Sample paragraph with a <a href='/link'>relative link</a>.</p>"
-markdown = html_to_markdown(html, base_url="https://example.com")
-metadata = extract_metadata(html, url="https://example.com", text_content=markdown)
-
-print("Markdown:", markdown)
-print("Token count:", metadata.token_stats["token_count"])
+from crawlcraft.extractor.chunker import chunk_markdown
+from crawlcraft.extractor.prompt_pack import pack_pages_for_llm
 
 # Programmatic Crawler execution
 async def run_crawler():
@@ -202,11 +218,19 @@ async def run_crawler():
         max_pages=20,
         concurrency=4,
         requests_per_second=5.0,
+        from_sitemap=True,
     )
     crawler = AsyncCrawler(config)
     pages = await crawler.run()
+    
+    # Generate RAG chunks
     for page in pages:
-        print(f"Crawled: {page.url} ({page.metadata.token_stats['token_count']} tokens)")
+        chunks = chunk_markdown(page.markdown, max_tokens=512)
+        print(f"URL: {page.url} -> {len(chunks)} chunks")
+
+    # Pack into LLM XML prompt block
+    xml_pack = pack_pages_for_llm(pages, format_type="xml")
+    print(f"Packed {len(pages)} pages into XML knowledge base")
 
 asyncio.run(run_crawler())
 ```
@@ -220,11 +244,14 @@ Run the automated test suite with pytest:
 pytest -v
 ```
 
-The test suite covers:
-- HTML cleaning, ad pruning, and structural boilerplate removal.
+The test suite contains 33 automated tests covering:
+- HTML cleaning, ad pruning, structural boilerplate removal, and custom CSS selectors.
 - GFM table parsing, code block language retention, and LaTeX math protection.
 - OpenGraph tags, Dublin Core, and Schema.org JSON-LD extraction.
 - Tiktoken `cl100k_base` estimation accuracy.
+- Hierarchical RAG chunking and heading breadcrumbs.
+- XML sitemaps, sitemap indexes, gzipped sitemaps, and RSS/Atom feed parsing.
+- LLM prompt context packaging in XML and Markdown formats.
 - SPA detection heuristics on empty root elements.
 - URL parameter normalization and 64-bit SimHash Hamming distance checks.
 - FastAPI endpoints, background tasks, and health probes.

@@ -1,22 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Globe,
   Sliders,
-  Download,
   Terminal,
   Activity,
   Layers,
   Sparkles,
   RefreshCw,
-  StopCircle,
   FileCode2,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Box,
+  ChevronDown,
+  ChevronUp,
+  Cpu,
+  FileText
 } from 'lucide-react';
-import { CrawledPage, CrawlJobStatus } from './types';
+import { CrawledPage } from './types';
 import { LiveCrawlConsole } from './components/LiveCrawlConsole';
 import { MarkdownPreview } from './components/MarkdownPreview';
 import { MetadataViewer } from './components/MetadataViewer';
 import { RAGTokenStats } from './components/RAGTokenStats';
+import { RagChunksViewer } from './components/RagChunksViewer';
+import { PromptPackModal } from './components/PromptPackModal';
 
 export const App: React.FC = () => {
   const [url, setUrl] = useState('https://example.com');
@@ -27,13 +32,18 @@ export const App: React.FC = () => {
   const [rps, setRps] = useState(5.0);
   const [spaFallback, setSpaFallback] = useState(true);
   const [sameDomain, setSameDomain] = useState(true);
+  const [fromSitemap, setFromSitemap] = useState(false);
+  const [includeSelectors, setIncludeSelectors] = useState('');
+  const [excludeSelectors, setExcludeSelectors] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [pages, setPages] = useState<CrawledPage[]>([]);
   const [selectedPage, setSelectedPage] = useState<CrawledPage | null>(null);
-  const [activeTab, setActiveTab] = useState<'markdown' | 'metadata'>('markdown');
+  const [activeTab, setActiveTab] = useState<'markdown' | 'chunks' | 'metadata'>('markdown');
   const [totalTokens, setTotalTokens] = useState(0);
+  const [isPromptPackOpen, setIsPromptPackOpen] = useState(false);
 
   // Quick preset URLs
   const presets = [
@@ -41,6 +51,13 @@ export const App: React.FC = () => {
     { label: 'FastAPI Docs', url: 'https://fastapi.tiangolo.com' },
     { label: 'Python.org', url: 'https://www.python.org' },
   ];
+
+  const parseSelectorList = (raw: string): string[] => {
+    return raw
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+  };
 
   // Single page extraction handler
   const handleExtract = async () => {
@@ -57,6 +74,8 @@ export const App: React.FC = () => {
           url,
           allow_spa_fallback: spaFallback,
           extract_main_only: true,
+          include_selectors: parseSelectorList(includeSelectors),
+          exclude_selectors: parseSelectorList(excludeSelectors),
         }),
       });
 
@@ -106,6 +125,9 @@ export const App: React.FC = () => {
           same_domain_only: sameDomain,
           allow_spa_fallback: spaFallback,
           extract_main_only: true,
+          seed_from_sitemaps: fromSitemap,
+          include_selectors: parseSelectorList(includeSelectors),
+          exclude_selectors: parseSelectorList(excludeSelectors),
         }),
       });
 
@@ -151,12 +173,12 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleExport = (format: 'jsonl' | 'markdown') => {
+  const handleExport = (format: 'jsonl' | 'markdown' | 'chunks' | 'llm_prompt') => {
     if (!activeJobId && pages.length === 0) return;
     if (activeJobId) {
       window.open(`/v1/crawl/${activeJobId}/export?format=${format}`, '_blank');
     } else {
-      // Local export for single extract
+      // Local fallback for single extract
       if (format === 'jsonl') {
         const text = pages.map((p) => JSON.stringify(p)).join('\n');
         const blob = new Blob([text], { type: 'application/x-ndjson' });
@@ -165,7 +187,9 @@ export const App: React.FC = () => {
         link.download = 'crawlcraft_export.jsonl';
         link.click();
       } else {
-        const text = pages.map((p) => `# ${p.metadata.title || p.url}\n\n**Source:** ${p.url}\n\n${p.markdown}`).join('\n\n---\n\n');
+        const text = pages
+          .map((p) => `# ${p.metadata.title || p.url}\n\n**Source:** ${p.url}\n\n${p.markdown}`)
+          .join('\n\n---\n\n');
         const blob = new Blob([text], { type: 'text/markdown' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
@@ -178,7 +202,7 @@ export const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
       {/* Top Navigation */}
-      <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-50 px-6 py-3.5 flex items-center justify-between">
+      <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-40 px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
             <Layers className="w-4 h-4" />
@@ -203,14 +227,23 @@ export const App: React.FC = () => {
           {pages.length > 0 && (
             <div className="flex items-center gap-2">
               <button
+                onClick={() => setIsPromptPackOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow transition"
+              >
+                <Box className="w-3.5 h-3.5" /> Pack for LLM
+              </button>
+
+              <button
                 onClick={() => handleExport('jsonl')}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 transition"
+                title="Export JSONL dataset"
               >
                 <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" /> JSONL
               </button>
               <button
                 onClick={() => handleExport('markdown')}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 transition"
+                title="Export Combined Markdown"
               >
                 <FileCode2 className="w-3.5 h-3.5 text-blue-400" /> Markdown
               </button>
@@ -220,8 +253,8 @@ export const App: React.FC = () => {
       </header>
 
       {/* Control Panel */}
-      <div className="border-b border-slate-800/80 bg-slate-900/40 p-6 space-y-4">
-        <div className="max-w-7xl mx-auto space-y-4">
+      <div className="border-b border-slate-800/80 bg-slate-900/40 p-5 space-y-3">
+        <div className="max-w-7xl mx-auto space-y-3">
           {/* URL Input & Mode Toggle */}
           <div className="flex flex-col md:flex-row gap-3">
             <div className="flex-1 relative">
@@ -290,56 +323,108 @@ export const App: React.FC = () => {
               ))}
             </div>
 
-            {mode === 'crawl' && (
-              <div className="flex flex-wrap items-center gap-4 text-slate-300">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-slate-400">Max Depth:</span>
-                  <select
-                    value={depth}
-                    onChange={(e) => setDepth(Number(e.target.value))}
-                    className="bg-slate-900 border border-slate-800 rounded px-2 py-0.5 text-xs text-slate-200 focus:outline-none"
-                  >
-                    {[1, 2, 3, 4, 5].map((d) => (
-                      <option key={d} value={d}>{d}</option>
-                    ))}
-                  </select>
-                </div>
+            <div className="flex flex-wrap items-center gap-4 text-slate-300">
+              {mode === 'crawl' && (
+                <>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-slate-400">Max Depth:</span>
+                    <select
+                      value={depth}
+                      onChange={(e) => setDepth(Number(e.target.value))}
+                      className="bg-slate-900 border border-slate-800 rounded px-2 py-0.5 text-xs text-slate-200 focus:outline-none"
+                    >
+                      {[1, 2, 3, 4, 5].map((d) => (
+                        <option key={d} value={d}>{d}</option>
+                      ))}
+                    </select>
+                  </div>
 
-                <div className="flex items-center gap-1.5">
-                  <span className="text-slate-400">Max Pages:</span>
-                  <select
-                    value={maxPages}
-                    onChange={(e) => setMaxPages(Number(e.target.value))}
-                    className="bg-slate-900 border border-slate-800 rounded px-2 py-0.5 text-xs text-slate-200 focus:outline-none"
-                  >
-                    {[10, 25, 50, 100, 200].map((m) => (
-                      <option key={m} value={m}>{m}</option>
-                    ))}
-                  </select>
-                </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-slate-400">Max Pages:</span>
+                    <select
+                      value={maxPages}
+                      onChange={(e) => setMaxPages(Number(e.target.value))}
+                      className="bg-slate-900 border border-slate-800 rounded px-2 py-0.5 text-xs text-slate-200 focus:outline-none"
+                    >
+                      {[10, 25, 50, 100, 200].map((m) => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </select>
+                  </div>
 
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={sameDomain}
-                    onChange={(e) => setSameDomain(e.target.checked)}
-                    className="rounded border-slate-800 bg-slate-900 text-emerald-500 focus:ring-0"
-                  />
-                  <span>Same Domain Only</span>
-                </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={sameDomain}
+                      onChange={(e) => setSameDomain(e.target.checked)}
+                      className="rounded border-slate-800 bg-slate-900 text-emerald-500 focus:ring-0"
+                    />
+                    <span>Same Domain</span>
+                  </label>
 
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={spaFallback}
-                    onChange={(e) => setSpaFallback(e.target.checked)}
-                    className="rounded border-slate-800 bg-slate-900 text-emerald-500 focus:ring-0"
-                  />
-                  <span>SPA Chromium Fallback</span>
-                </label>
-              </div>
-            )}
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={fromSitemap}
+                      onChange={(e) => setFromSitemap(e.target.checked)}
+                      className="rounded border-slate-800 bg-slate-900 text-emerald-500 focus:ring-0"
+                    />
+                    <span>Seed from Sitemap</span>
+                  </label>
+                </>
+              )}
+
+              <label className="flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={spaFallback}
+                  onChange={(e) => setSpaFallback(e.target.checked)}
+                  className="rounded border-slate-800 bg-slate-900 text-emerald-500 focus:ring-0"
+                />
+                <span>SPA Chromium Fallback</span>
+              </label>
+
+              <button
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 border border-slate-700/60 transition"
+              >
+                <Sliders className="w-3.5 h-3.5 text-slate-400" />
+                <span>Filters & Selectors</span>
+                {showAdvanced ? <ChevronUp className="w-3 h-3 ml-0.5" /> : <ChevronDown className="w-3 h-3 ml-0.5" />}
+              </button>
+            </div>
           </div>
+
+          {/* Advanced Accordion for CSS Selectors */}
+          {showAdvanced && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-slate-800/80 animate-in fade-in duration-100">
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                  Include CSS Selectors (comma-separated, isolates containers):
+                </label>
+                <input
+                  type="text"
+                  value={includeSelectors}
+                  onChange={(e) => setIncludeSelectors(e.target.value)}
+                  placeholder="e.g. article, main, #content-area"
+                  className="w-full px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 transition font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                  Exclude CSS Selectors (comma-separated, strips noise/promos):
+                </label>
+                <input
+                  type="text"
+                  value={excludeSelectors}
+                  onChange={(e) => setExcludeSelectors(e.target.value)}
+                  placeholder="e.g. .newsletter-box, #social-share, .ad-banner"
+                  className="w-full px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-emerald-500 transition font-mono"
+                />
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -370,31 +455,49 @@ export const App: React.FC = () => {
               <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
                 <button
                   onClick={() => setActiveTab('markdown')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
                     activeTab === 'markdown'
-                      ? 'bg-slate-800 text-emerald-400'
+                      ? 'bg-slate-800 text-emerald-400 shadow-sm'
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  Synthesized Markdown
+                  <FileText className="w-3.5 h-3.5" /> Synthesized Markdown
+                </button>
+                <button
+                  onClick={() => setActiveTab('chunks')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                    activeTab === 'chunks'
+                      ? 'bg-slate-800 text-emerald-400 shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5" /> RAG Chunks
                 </button>
                 <button
                   onClick={() => setActiveTab('metadata')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
                     activeTab === 'metadata'
-                      ? 'bg-slate-800 text-emerald-400'
+                      ? 'bg-slate-800 text-emerald-400 shadow-sm'
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  Document Metadata ({selectedPage.metadata.json_ld?.length || 0} Schemas)
+                  <Cpu className="w-3.5 h-3.5" /> Metadata & Schemas ({selectedPage.metadata.json_ld?.length || 0})
                 </button>
               </div>
 
               {/* Tab Content */}
               <div className="flex-1 min-h-0">
-                {activeTab === 'markdown' ? (
+                {activeTab === 'markdown' && (
                   <MarkdownPreview markdown={selectedPage.markdown} url={selectedPage.url} />
-                ) : (
+                )}
+                {activeTab === 'chunks' && (
+                  <RagChunksViewer
+                    markdown={selectedPage.markdown}
+                    url={selectedPage.url}
+                    title={selectedPage.metadata.title}
+                  />
+                )}
+                {activeTab === 'metadata' && (
                   <div className="h-full overflow-y-auto">
                     <MetadataViewer metadata={selectedPage.metadata} />
                   </div>
@@ -412,6 +515,13 @@ export const App: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Prompt Pack Modal */}
+      <PromptPackModal
+        isOpen={isPromptPackOpen}
+        onClose={() => setIsPromptPackOpen(false)}
+        pages={pages}
+      />
     </div>
   );
 };

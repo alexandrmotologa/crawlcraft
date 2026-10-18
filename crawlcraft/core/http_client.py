@@ -122,8 +122,9 @@ class AsyncHttpClient:
         self,
         url: str,
         custom_headers: Optional[Dict[str, str]] = None,
+        cookies: Optional[Dict[str, str]] = None,
     ) -> HttpResponse:
-        """Fetch a URL with HTTP/2, realistic headers, and exponential backoff retries."""
+        """Fetch a URL with HTTP/2, realistic headers, cookies, and exponential backoff retries."""
         client = await self._ensure_client()
         headers = self._get_browser_headers()
         if custom_headers:
@@ -133,7 +134,7 @@ class AsyncHttpClient:
         for attempt in range(self.retries + 1):
             start_time = time.perf_counter()
             try:
-                resp = await client.get(url, headers=headers)
+                resp = await client.get(url, headers=headers, cookies=cookies)
                 elapsed_ms = (time.perf_counter() - start_time) * 1000.0
 
                 if resp.status_code == 429 and attempt < self.retries:

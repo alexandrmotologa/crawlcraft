@@ -50,3 +50,44 @@ def test_extract_main_content_node():
     main_node = extract_main_content_node(parser)
     assert main_node is not None
     assert main_node.tag == "article"
+
+
+def test_custom_exclude_selectors():
+    html = """
+    <html>
+      <body>
+        <div class="sidebar">Sidebar info</div>
+        <div class="promo-box">Sign up for special discount!</div>
+        <main>
+          <h1>Doc Title</h1>
+          <p>Main content of documentation.</p>
+          <div class="rating-widget">Rate this page: 5 stars</div>
+        </main>
+      </body>
+    </html>
+    """
+    cleaned = clean_html_tree(html, exclude_selectors=[".promo-box", ".rating-widget"])
+    text = cleaned.body.text(deep=True) if cleaned.body else ""
+
+    assert "Sign up for special discount" not in text
+    assert "Rate this page" not in text
+    assert "Main content of documentation" in text
+
+
+def test_custom_include_selectors():
+    html = """
+    <html>
+      <body>
+        <div id="general-wrapper">Some generic wrapper text</div>
+        <div class="custom-target-container">
+          <h2>Isolated Target</h2>
+          <p>This is the only section we care to extract.</p>
+        </div>
+      </body>
+    </html>
+    """
+    parser = LexborHTMLParser(html)
+    node = extract_main_content_node(parser, include_selectors=[".custom-target-container"])
+    assert node is not None
+    assert "Isolated Target" in node.text(deep=True)
+    assert "generic wrapper" not in node.text(deep=True)

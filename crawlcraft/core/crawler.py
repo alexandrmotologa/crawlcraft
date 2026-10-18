@@ -12,6 +12,7 @@ from crawlcraft.core.deduplicator import ContentDeduplicator, normalize_url
 from crawlcraft.core.http_client import AsyncHttpClient
 from crawlcraft.core.rate_limiter import DomainRateLimiter
 from crawlcraft.core.robots import RobotsManager
+from crawlcraft.core.sitemap import fetch_and_parse_sitemaps
 from crawlcraft.extractor.markdown import MarkdownConverter
 from crawlcraft.extractor.metadata import PageMetadata, extract_metadata
 
@@ -34,6 +35,12 @@ class CrawlConfig:
         allow_spa_fallback: bool = True,
         extract_main_only: bool = True,
         timeout_seconds: float = 15.0,
+        include_selectors: Optional[List[str]] = None,
+        exclude_selectors: Optional[List[str]] = None,
+        custom_headers: Optional[Dict[str, str]] = None,
+        cookies: Optional[Dict[str, str]] = None,
+        from_sitemap: bool = False,
+        webhook_url: Optional[str] = None,
     ) -> None:
         self.start_urls = start_urls
         self.max_depth = max_depth
@@ -46,6 +53,12 @@ class CrawlConfig:
         self.allow_spa_fallback = allow_spa_fallback
         self.extract_main_only = extract_main_only
         self.timeout_seconds = timeout_seconds
+        self.include_selectors = include_selectors
+        self.exclude_selectors = exclude_selectors
+        self.custom_headers = custom_headers
+        self.cookies = cookies
+        self.from_sitemap = from_sitemap
+        self.webhook_url = webhook_url
 
 
 class CrawledPage:
@@ -161,7 +174,11 @@ class AsyncCrawler:
             await self.rate_limiter.acquire(url)
 
             # Step 1: Attempt ultra-fast HTTP/2 fetch
-            response = await self.http_client.get(url)
+            response = await self.http_client.get(
+                url,
+                custom_headers=self.config.custom_headers,
+                cookies=self.config.cookies,
+            )
 
             if not response.is_success:
                 self.failed_count += 1
@@ -188,9 +205,14 @@ class AsyncCrawler:
                         html_content = rendered_html
                         rendered_with = "playwright_chromium"
 
-            # Step 3: Markdown conversion & content synthesis
+            # Step 3: Markdown conversion & content synthesis with selectors
             converter = MarkdownConverter(base_url=url)
-            markdown = converter.convert(html_content, extract_main_only=self.config.extract_main_only)
+            markdown = converter.convert(
+                html_content,
+                extract_main_only=self.config.extract_main_only,
+                include_selectors=self.config.include_selectors,
+                exclude_selectors=self.config.exclude_selectors,
+            )
 
             # Step 4: Near-duplicate content check using SimHash
             is_dup, orig_url = self.deduplicator.is_content_duplicate(markdown)
@@ -264,9 +286,23 @@ class AsyncCrawler:
             domain = urlparse(url).netloc.lower()
             if domain:
                 self._initial_domains.add(domain)
-            normalized = normalize_url(url)
-            self.deduplicator.mark_url_seen(normalized)
-            await self.queue.put((normalized, 0))
+
+            if not self.config.from_sitemap:
+                normalized = normalize_url(url)
+                self.deduplicator.mark_url_seen(normalized)
+                await self.queue.put((normalized, 0))
+
+        # If from_sitemap is enabled, discover and seed queue from XML sitemaps
+        if self.config.from_sitemap:
+            for seed_url in self.config.start_urls:
+                try:
+                    sitemap_entries = await fetch_and_parse_sitemaps(seed_url, max_urls=self.config.max_pages)
+                    for entry in sitemap_entries:
+                        if not self.deduplicator.is_url_seen(entry.url):
+                            self.deduplicator.mark_url_seen(entry.url)
+                            await self.queue.put((entry.url, 0))
+                except Exception as exc:
+                    logger.warning("Failed to fetch sitemap for %s: %s", seed_url, exc)
 
         # Launch worker tasks up to concurrency limit
         workers = [asyncio.create_task(self._worker()) for _ in range(self.config.concurrency)]
@@ -277,6 +313,22 @@ class AsyncCrawler:
         for w in workers:
             w.cancel()
         await asyncio.gather(*workers, return_exceptions=True)
+
+        # Trigger webhook notification if configured
+        if self.config.webhook_url:
+            try:
+                import httpx
+                summary = {
+                    "event": "crawl_completed",
+                    "crawled_count": self.crawled_count,
+                    "failed_count": self.failed_count,
+                    "total_tokens": sum(p.metadata.token_stats.get("token_count", 0) for p in self.results),
+                    "urls": [p.url for p in self.results],
+                }
+                async with httpx.AsyncClient(timeout=5.0) as hook_client:
+                    await hook_client.post(self.config.webhook_url, json=summary)
+            except Exception as exc:
+                logger.warning("Webhook POST to %s failed: %s", self.config.webhook_url, exc)
 
         # Cleanup resources
         await self.http_client.close()

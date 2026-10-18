@@ -1,4 +1,4 @@
-"""FastAPI route handlers for synchronous extraction, crawl jobs, and SSE streaming."""
+"""FastAPI route handlers for synchronous extraction, crawl jobs, SSE streaming, sitemaps, and LLM packs."""
 
 import asyncio
 from datetime import datetime, timezone
@@ -13,14 +13,20 @@ from crawlcraft.browser.headless_pool import HeadlessBrowserPool
 from crawlcraft.browser.spa_detector import detect_spa_shell
 from crawlcraft.core.crawler import AsyncCrawler, CrawlConfig, CrawledPage
 from crawlcraft.core.http_client import AsyncHttpClient
+from crawlcraft.core.sitemap import fetch_and_parse_sitemaps
+from crawlcraft.extractor.chunker import chunk_markdown
+from crawlcraft.extractor.html_cleaner import clean_html_tree
 from crawlcraft.extractor.markdown import html_to_markdown
 from crawlcraft.extractor.metadata import extract_metadata
+from crawlcraft.extractor.prompt_pack import pack_pages_for_llm
 from crawlcraft.server.models import (
     CrawlJobResponse,
     CrawlJobStatus,
     CrawlRequest,
     ExtractRequest,
     ExtractResponse,
+    SitemapRequest,
+    SitemapResponse,
 )
 from crawlcraft.server.sse import format_sse
 
@@ -51,7 +57,7 @@ JOBS: Dict[str, JobRecord] = {}
 
 @router.post("/extract", response_model=ExtractResponse)
 async def extract_content(req: ExtractRequest) -> ExtractResponse:
-    """Extracts clean Markdown and structured metadata from a URL or raw HTML string."""
+    """Extracts clean Markdown, cleaned HTML, and structured metadata from a URL or raw HTML string."""
     if not req.url and not req.html:
         raise HTTPException(status_code=400, detail="Must provide either 'url' or 'html' in request")
 
@@ -62,7 +68,11 @@ async def extract_content(req: ExtractRequest) -> ExtractResponse:
 
     if req.url and not req.html:
         async with AsyncHttpClient() as client:
-            resp = await client.get(req.url)
+            resp = await client.get(
+                req.url,
+                custom_headers=req.custom_headers,
+                cookies=req.cookies,
+            )
             if not resp.is_success:
                 raise HTTPException(status_code=502, detail=f"Failed to fetch {req.url}: {resp.error_message}")
             html_content = resp.text
@@ -81,7 +91,17 @@ async def extract_content(req: ExtractRequest) -> ExtractResponse:
                     finally:
                         await pool.close()
 
-    markdown = html_to_markdown(html_content, base_url=target_url, extract_main_only=req.extract_main_only)
+    # Clean HTML tree to provide DOM inspection
+    cleaned_tree = clean_html_tree(html_content, exclude_selectors=req.exclude_selectors)
+    cleaned_html = cleaned_tree.body.html if cleaned_tree.body else html_content
+
+    markdown = html_to_markdown(
+        html_content,
+        base_url=target_url,
+        extract_main_only=req.extract_main_only,
+        include_selectors=req.include_selectors,
+        exclude_selectors=req.exclude_selectors,
+    )
     meta = extract_metadata(html_content, url=target_url, text_content=markdown)
     elapsed = (time.perf_counter() - start_time) * 1000.0
 
@@ -91,6 +111,7 @@ async def extract_content(req: ExtractRequest) -> ExtractResponse:
         metadata=meta.to_dict(),
         rendered_with=rendered_with,
         elapsed_ms=round(elapsed, 2),
+        cleaned_html=cleaned_html,
     )
 
 
@@ -107,6 +128,12 @@ async def _run_crawl_job(job: JobRecord) -> None:
         respect_robots_txt=job.request.respect_robots_txt,
         allow_spa_fallback=job.request.allow_spa_fallback,
         extract_main_only=job.request.extract_main_only,
+        include_selectors=job.request.include_selectors,
+        exclude_selectors=job.request.exclude_selectors,
+        custom_headers=job.request.custom_headers,
+        cookies=job.request.cookies,
+        from_sitemap=job.request.get_from_sitemap(),
+        webhook_url=job.request.webhook_url,
     )
 
     async def on_page_scraped(page: CrawledPage) -> None:
@@ -213,8 +240,13 @@ async def stream_crawl_events(job_id: str) -> StreamingResponse:
 
 
 @router.get("/crawl/{job_id}/export")
-async def export_crawl(job_id: str, format: str = Query("jsonl", pattern="^(jsonl|markdown)$")) -> Response:
-    """Downloads the crawled dataset formatted as JSONL or a consolidated Markdown document."""
+async def export_crawl(
+    job_id: str,
+    format: str = Query("jsonl", pattern="^(jsonl|markdown|chunks|llm_prompt)$"),
+    chunk_tokens: int = Query(512, ge=64, le=4096),
+    chunk_overlap: int = Query(50, ge=0, le=512),
+) -> Response:
+    """Downloads the crawled dataset formatted as JSONL, Markdown, RAG vector chunks, or LLM prompt context."""
     job = JOBS.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
@@ -227,8 +259,7 @@ async def export_crawl(job_id: str, format: str = Query("jsonl", pattern="^(json
             media_type="application/x-ndjson",
             headers={"Content-Disposition": f'attachment; filename="crawlcraft_{job_id}.jsonl"'},
         )
-    else:
-        # Markdown export
+    elif format == "markdown":
         sections = []
         for p in job.pages:
             title = p.metadata.title or p.url
@@ -239,3 +270,43 @@ async def export_crawl(job_id: str, format: str = Query("jsonl", pattern="^(json
             media_type="text/markdown",
             headers={"Content-Disposition": f'attachment; filename="crawlcraft_{job_id}.md"'},
         )
+    elif format == "chunks":
+        all_chunks = []
+        for p in job.pages:
+            meta = {
+                "source_url": p.url,
+                "title": p.metadata.title,
+                "rendered_with": p.rendered_with,
+            }
+            chunks = chunk_markdown(
+                markdown=p.markdown,
+                max_tokens=chunk_tokens,
+                overlap_tokens=chunk_overlap,
+                doc_id=p.url.replace("://", "_").replace("/", "_")[:32],
+                metadata=meta,
+            )
+            for c in chunks:
+                all_chunks.append(json.dumps(c.to_dict()))
+        content = "\n".join(all_chunks)
+        return Response(
+            content=content,
+            media_type="application/x-ndjson",
+            headers={"Content-Disposition": f'attachment; filename="crawlcraft_{job_id}_chunks.jsonl"'},
+        )
+    elif format == "llm_prompt":
+        content = pack_pages_for_llm(job.pages, format_type="xml")
+        return Response(
+            content=content,
+            media_type="application/xml",
+            headers={"Content-Disposition": f'attachment; filename="crawlcraft_{job_id}_context.xml"'},
+        )
+
+
+@router.post("/sitemap", response_model=SitemapResponse)
+async def discover_sitemap(req: SitemapRequest) -> SitemapResponse:
+    """Discovers and parses XML sitemaps or feeds for a domain."""
+    discovered = await fetch_and_parse_sitemaps(req.url, max_urls=req.max_urls)
+    return SitemapResponse(
+        urls=[u.to_dict() for u in discovered],
+        count=len(discovered),
+    )
