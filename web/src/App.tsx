@@ -202,47 +202,47 @@ export const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
       {/* Top Navigation */}
-      <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-40 px-6 py-3 flex items-center justify-between">
+      <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-40 px-4 sm:px-6 py-3 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+          <div className="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 flex-shrink-0">
             <Layers className="w-4 h-4" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-bold tracking-tight text-slate-100 text-base">CrawlCraft</span>
+              <span className="font-bold tracking-tight text-slate-100 text-sm sm:text-base">CrawlCraft</span>
               <span className="text-[10px] uppercase font-mono px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-semibold border border-emerald-500/30">
                 v0.1.0
               </span>
             </div>
-            <p className="text-[11px] text-slate-400">Selectolax C-Parser &bull; HTTP/2 &bull; Lazy SPA Chromium</p>
+            <p className="text-[10px] sm:text-[11px] text-slate-400">Selectolax C-Parser &bull; HTTP/2 &bull; Lazy SPA Chromium</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-xs text-slate-300">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+          <div className="hidden xs:flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg bg-slate-900 border border-slate-800 text-[11px] sm:text-xs text-slate-300">
             <Activity className="w-3.5 h-3.5 text-emerald-400" />
             <span>Engine Ready</span>
           </div>
 
           {pages.length > 0 && (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
               <button
                 onClick={() => setIsPromptPackOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow transition"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs shadow transition"
               >
                 <Box className="w-3.5 h-3.5" /> Pack for LLM
               </button>
 
               <button
                 onClick={() => handleExport('jsonl')}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 transition"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 transition"
                 title="Export JSONL dataset"
               >
                 <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-400" /> JSONL
               </button>
               <button
                 onClick={() => handleExport('markdown')}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 transition"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 transition"
                 title="Export Combined Markdown"
               >
                 <FileCode2 className="w-3.5 h-3.5 text-blue-400" /> Markdown
@@ -253,10 +253,10 @@ export const App: React.FC = () => {
       </header>
 
       {/* Control Panel */}
-      <div className="border-b border-slate-800/80 bg-slate-900/40 p-5 space-y-3">
+      <div className="border-b border-slate-800/80 bg-slate-900/40 p-4 sm:p-5 space-y-3">
         <div className="max-w-7xl mx-auto space-y-3">
           {/* URL Input & Mode Toggle */}
-          <div className="flex flex-col md:flex-row gap-3">
+          <div className="flex flex-col md:flex-row gap-2.5 sm:gap-3">
             <div className="flex-1 relative">
               <Globe className="w-4 h-4 absolute left-3.5 top-3.5 text-slate-500" />
               <input
@@ -264,15 +264,15 @@ export const App: React.FC = () => {
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 placeholder="https://docs.example.com"
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-900/80 border border-slate-700 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition shadow-inner font-mono"
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-900/80 border border-slate-700 rounded-xl text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition shadow-inner font-mono"
               />
             </div>
 
-            <div className="flex items-center gap-2">
-              <div className="flex p-1 bg-slate-900 rounded-xl border border-slate-800">
+            <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
+              <div className="flex p-1 bg-slate-900 rounded-xl border border-slate-800 flex-1 sm:flex-initial">
                 <button
                   onClick={() => setMode('crawl')}
-                  className={`px-3 py-2 rounded-lg text-xs font-semibold transition ${
+                  className={`flex-1 sm:flex-initial px-3 py-2 rounded-lg text-xs font-semibold transition ${
                     mode === 'crawl' ? 'bg-emerald-500 text-slate-950 shadow-sm' : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
@@ -280,7 +280,7 @@ export const App: React.FC = () => {
                 </button>
                 <button
                   onClick={() => setMode('extract')}
-                  className={`px-3 py-2 rounded-lg text-xs font-semibold transition ${
+                  className={`flex-1 sm:flex-initial px-3 py-2 rounded-lg text-xs font-semibold transition ${
                     mode === 'extract' ? 'bg-emerald-500 text-slate-950 shadow-sm' : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
@@ -291,7 +291,7 @@ export const App: React.FC = () => {
               <button
                 onClick={mode === 'crawl' ? handleStartCrawl : handleExtract}
                 disabled={isLoading}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold text-sm shadow-md transition"
+                className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold text-xs sm:text-sm shadow-md transition flex-1 sm:flex-initial"
               >
                 {isLoading ? (
                   <>
@@ -309,21 +309,21 @@ export const App: React.FC = () => {
           </div>
 
           {/* Quick Presets & Config Options */}
-          <div className="flex flex-wrap items-center justify-between gap-4 pt-1 text-xs">
-            <div className="flex items-center gap-2 text-slate-400">
-              <span className="font-semibold text-slate-500">Presets:</span>
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-1 text-xs">
+            <div className="flex items-center gap-2 text-slate-400 overflow-x-auto max-w-full pb-1">
+              <span className="font-semibold text-slate-500 flex-shrink-0">Presets:</span>
               {presets.map((p) => (
                 <button
                   key={p.label}
                   onClick={() => setUrl(p.url)}
-                  className="px-2.5 py-1 rounded-md bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 border border-slate-700/60 transition"
+                  className="px-2.5 py-1 rounded-md bg-slate-800/80 hover:bg-slate-700/80 text-slate-300 border border-slate-700/60 transition flex-shrink-0"
                 >
                   {p.label}
                 </button>
               ))}
             </div>
 
-            <div className="flex flex-wrap items-center gap-4 text-slate-300">
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-slate-300">
               {mode === 'crawl' && (
                 <>
                   <div className="flex items-center gap-1.5">
@@ -369,7 +369,7 @@ export const App: React.FC = () => {
                       onChange={(e) => setFromSitemap(e.target.checked)}
                       className="rounded border-slate-800 bg-slate-900 text-emerald-500 focus:ring-0"
                     />
-                    <span>Seed from Sitemap</span>
+                    <span>Seed Sitemap</span>
                   </label>
                 </>
               )}
@@ -381,7 +381,7 @@ export const App: React.FC = () => {
                   onChange={(e) => setSpaFallback(e.target.checked)}
                   className="rounded border-slate-800 bg-slate-900 text-emerald-500 focus:ring-0"
                 />
-                <span>SPA Chromium Fallback</span>
+                <span>SPA Fallback</span>
               </label>
 
               <button
@@ -429,9 +429,9 @@ export const App: React.FC = () => {
       </div>
 
       {/* Main Workspace Split Screen */}
-      <div className="flex-1 max-w-7xl w-full mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-0">
+      <div className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 min-h-0">
         {/* Left column: Discovered Pages Console */}
-        <div className="lg:col-span-4 h-[720px]">
+        <div className="lg:col-span-4 h-[380px] sm:h-[480px] lg:h-[720px]">
           <LiveCrawlConsole
             pages={pages}
             selectedUrl={selectedPage?.url ?? null}
@@ -441,7 +441,7 @@ export const App: React.FC = () => {
         </div>
 
         {/* Right column: Document Inspector & Stats */}
-        <div className="lg:col-span-8 h-[720px] flex flex-col space-y-4">
+        <div className="lg:col-span-8 min-h-[500px] lg:h-[720px] flex flex-col space-y-3 sm:space-y-4">
           {selectedPage ? (
             <>
               {/* Token Stats Bar */}
@@ -452,10 +452,10 @@ export const App: React.FC = () => {
               />
 
               {/* Inspector Tabs */}
-              <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+              <div className="flex items-center gap-1.5 sm:gap-2 border-b border-slate-800 pb-2 overflow-x-auto max-w-full">
                 <button
                   onClick={() => setActiveTab('markdown')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition flex-shrink-0 ${
                     activeTab === 'markdown'
                       ? 'bg-slate-800 text-emerald-400 shadow-sm'
                       : 'text-slate-400 hover:text-slate-200'
@@ -465,7 +465,7 @@ export const App: React.FC = () => {
                 </button>
                 <button
                   onClick={() => setActiveTab('chunks')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition flex-shrink-0 ${
                     activeTab === 'chunks'
                       ? 'bg-slate-800 text-emerald-400 shadow-sm'
                       : 'text-slate-400 hover:text-slate-200'
@@ -475,13 +475,13 @@ export const App: React.FC = () => {
                 </button>
                 <button
                   onClick={() => setActiveTab('metadata')}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition flex-shrink-0 ${
                     activeTab === 'metadata'
                       ? 'bg-slate-800 text-emerald-400 shadow-sm'
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  <Cpu className="w-3.5 h-3.5" /> Metadata & Schemas ({selectedPage.metadata.json_ld?.length || 0})
+                  <Cpu className="w-3.5 h-3.5" /> Metadata ({selectedPage.metadata.json_ld?.length || 0})
                 </button>
               </div>
 

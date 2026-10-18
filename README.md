@@ -26,7 +26,13 @@ CrawlCraft provides a local alternative. It runs an asynchronous HTTP/2 network 
 
 ## Live Studio & Architecture
 
-![CrawlCraft Studio](docs/images/crawlcraft_dashboard.png)
+The web interface is built with responsive breakpoints for desktop, tablet, and mobile displays.
+
+![CrawlCraft Desktop Studio](docs/images/crawlcraft_dashboard.png)
+
+<div align="center">
+  <img src="docs/images/crawlcraft_mobile.png" alt="CrawlCraft Mobile Viewport" width="320" />
+</div>
 
 ```
 +-----------------------------------------------------------------------------------+

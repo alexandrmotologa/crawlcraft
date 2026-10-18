@@ -12,14 +12,14 @@ export const RAGTokenStats: React.FC<Props> = ({ stats, engine, elapsedMs }) => 
   const density = stats.token_count > 0 ? (stats.word_count / stats.token_count).toFixed(2) : '0';
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-3 p-4 bg-slate-900/60 rounded-xl border border-slate-800">
-      <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
-          <Sparkles className="w-4 h-4" />
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 sm:gap-3 p-3 sm:p-4 bg-slate-900/60 rounded-xl border border-slate-800">
+      <div className="flex items-center gap-2.5 sm:gap-3">
+        <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 flex-shrink-0">
+          <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
         </div>
         <div>
-          <div className="text-xs text-slate-400 font-medium">cl100k Tokens</div>
-          <div className="text-lg font-bold text-slate-100 font-mono">
+          <div className="text-[10px] sm:text-xs text-slate-400 font-medium">cl100k Tokens</div>
+          <div className="text-base sm:text-lg font-bold text-slate-100 font-mono">
             {stats.token_count?.toLocaleString() ?? 0}
           </div>
         </div>
